@@ -14,22 +14,52 @@
     <input id="input" type="text" placeholder="Введите ваше имя для старта, а затем команды..." autofocus>
 
     <script>
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
         const log = document.getElementById('log');
         const input = document.getElementById('input');
-
-        ws.onmessage = function(event) {
-            log.innerHTML += '<div>' + event.data + '</div>';
-            log.scrollTop = log.scrollHeight;
-        };
-
+        let ws;
+        let username = ""; // Запоминаем имя игрока, чтобы не вводить дважды
+        
+        function connect() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+        
+            ws.onopen = function() {
+                // Если связь оборвалась, но имя уже было введено — автоматически отправляем его серверу
+                if (username) {
+                    ws.send(username);
+                }
+            };
+        
+            ws.onmessage = function(event) {
+                // Проверяем, просит ли сервер ввести имя. Если мы его уже вводили — игнорируем системный спам
+                if (event.data.includes("Введите ваше имя") && username) {
+                    return; 
+                }
+                log.innerHTML += '<div>' + event.data + '</div>';
+                log.scrollTop = log.scrollHeight;
+            };
+        
+            ws.onclose = function() {
+                console.log("Соединение потеряно. Переподключение через 2 секунды...");
+                setTimeout(connect, 2000); // Пробуем подключиться заново через 2 секунды
+            };
+        }
+        
         input.onkeydown = function(event) {
             if (event.key === 'Enter' && input.value.trim() !== '') {
-                ws.send(input.value);
+                let text = input.value;
+                // Если это первый ввод — сохраняем имя в память браузера
+                if (!username) {
+                    username = text.strip ? text.strip() : text;
+                }
+                ws.send(text);
                 input.value = '';
             }
         };
+        
+        // Запускаем первое подключение
+        connect();
+
     </script>
 </body>
 </html>
